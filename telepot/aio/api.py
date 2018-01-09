@@ -4,6 +4,8 @@ import async_timeout
 import atexit
 import re
 import json
+import aiosocks
+from aiosocks.connector import ProxyConnector, ProxyClientRequest
 from .. import exception
 from ..api import _methodurl, _which_pool, _fileurl, _guess_filename
 
@@ -17,13 +19,30 @@ _pools = {
 
 _timeout = 30
 _proxy = None  # (url, (username, password))
+_proxy_auth = None
 
-def set_proxy(url, basic_auth=None):
+def set_proxy(url, auth=None):
     global _proxy
+    global _proxy_auth
     if not url:
         _proxy = None
     else:
-        _proxy = (url, basic_auth) if basic_auth else (url,)
+        type = url.split(':')[0];
+        _proxy = (type, url, auth) if auth else (type, url,)
+        if type != "http":
+            import aiosocks
+            from aiosocks.connector import ProxyConnector, ProxyClientRequest
+
+        socks_conn = ProxyConnector(remote_resolve=True, limit=10);
+        _pools['default'] = aiohttp.ClientSession(connector=socks_conn, request_class=ProxyClientRequest, loop=_loop)
+
+        _proxy_auth = {
+                    "http": aiohttp.BasicAuth,
+                    "socks4": aiosocks.Socks4Auth,
+                    "socks5": aiosocks.Socks5Auth,
+            }.get(type, None);
+
+
 
 def _close_pools():
     global _pools
@@ -33,7 +52,11 @@ def _close_pools():
 atexit.register(_close_pools)
 
 def _create_onetime_pool():
-    return aiohttp.ClientSession(
+    if _proxy and _proxy[0] != "http":
+        socks_conn = ProxyConnector(remote_resolve=True, limit=1, force_close=True);
+        return aiohttp.ClientSession(connector=socks_conn, request_class=ProxyClientRequest, loop=_loop)
+    else:
+        return aiohttp.ClientSession(
                connector=aiohttp.TCPConnector(limit=1, force_close=True),
                loop=_loop)
 
@@ -125,10 +148,9 @@ async def request(req, **user_kw):
     fn, args, kwargs, timeout, cleanup = _transform(req, **user_kw)
 
     if _proxy:
-        kwargs['proxy'] = _proxy[0]
-        if len(_proxy) > 1:
-            kwargs['proxy_auth'] = aiohttp.BasicAuth(*_proxy[1])
-
+        kwargs['proxy'] = _proxy[1]
+        if len(_proxy) > 2 and _proxy_auth:
+            kwargs['proxy_auth'] = _proxy_auth(*_proxy[2]);
     try:
         if timeout is None:
             async with fn(*args, **kwargs) as r:
