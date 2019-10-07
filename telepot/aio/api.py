@@ -9,6 +9,7 @@ from aiosocks.connector import ProxyConnector, ProxyClientRequest
 from .. import exception
 from ..api import _methodurl, _which_pool, _fileurl, _guess_filename
 
+
 _loop = asyncio.get_event_loop()
 
 _pools = {
@@ -29,18 +30,19 @@ def set_proxy(url, auth=None):
     else:
         type = url.split(':')[0];
         _proxy = (type, url, auth) if auth else (type, url,)
+
+        _proxy_auth = aiohttp.BasicAuth
         if type != "http":
             import aiosocks
             from aiosocks.connector import ProxyConnector, ProxyClientRequest
+            socks_conn = ProxyConnector(remote_resolve=True, limit=10);
+            _pools['default'] = aiohttp.ClientSession(connector=socks_conn, request_class=ProxyClientRequest, loop=_loop)
 
-        socks_conn = ProxyConnector(remote_resolve=True, limit=10);
-        _pools['default'] = aiohttp.ClientSession(connector=socks_conn, request_class=ProxyClientRequest, loop=_loop)
-
-        _proxy_auth = {
-                    "http": aiohttp.BasicAuth,
-                    "socks4": aiosocks.Socks4Auth,
-                    "socks5": aiosocks.Socks5Auth,
-            }.get(type, None);
+            _proxy_auth = {
+                        "socks4": aiosocks.Socks4Auth,
+                        "socks5": aiosocks.Socks5Auth,
+                }.get(type, None);
+        
 
 
 
