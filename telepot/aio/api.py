@@ -33,8 +33,6 @@ def set_proxy(url, auth=None):
 
         _proxy_auth = aiohttp.BasicAuth
         if type != "http":
-            import aiosocks
-            from aiosocks.connector import ProxyConnector, ProxyClientRequest
             socks_conn = ProxyConnector(remote_resolve=True, limit=10);
             _pools['default'] = aiohttp.ClientSession(connector=socks_conn, request_class=ProxyClientRequest, loop=_loop)
 
