@@ -52,7 +52,7 @@ def set_proxy(url, auth=None):
 
 def _proxy_kwargs():
     if _proxy is None or len(_proxy) == 0 or\
-        _proxy[0] == 'http':  # as currently only http support `proxy` and `proxy_auth` kwargs
+        _proxy[0] != 'http':  # as currently only http support `proxy` and `proxy_auth` kwargs
         return {}
     try:
         kw = {'proxy': _proxy[1]}
