@@ -1,5 +1,18 @@
 # telepot changelog
 
+## 12.7 (2018-05-27)
+
+- Await `aiohttp.ClientSession.close()`
+- Upgraded dependency `aiohttp>=3.0.0`
+
+## 12.6 (2018-02-24)
+
+- Bot API 3.6
+- Added `parse_mode` to all methods and namedtuples supporting `caption`
+- Added `supports_streaming` and `connected_website` to relevant methods and
+  namedtuples
+- Fixed downloading through proxy in `telepot.aio.api` module
+
 ## 12.5 (2017-11-28)
 
 - Bot API 3.5

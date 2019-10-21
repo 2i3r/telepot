@@ -44,12 +44,24 @@ def set_proxy(url, auth=None):
 
 
 
-def _close_pools():
+def _proxy_kwargs():
+    if _proxy is None or len(_proxy) == 0:
+        return {}
+    try:
+        kw = {'proxy': _proxy[1]}
+        if len(_proxy) >= 2 and _proxy_auth:
+            kw['proxy_auth'] = _proxy_auth(*_proxy[2])
+    except:
+        raise RuntimeError("_proxy has invalid length")
+    finally:
+        return kw
+
+async def _close_pools():
     global _pools
     for s in _pools.values():
-        s.close()
+        await s.close()
 
-atexit.register(_close_pools)
+atexit.register(lambda: _loop.create_task(_close_pools()))  # have to wrap async function
 
 def _create_onetime_pool():
     if _proxy and _proxy[0] != "http":
@@ -147,10 +159,7 @@ async def _parse(response):
 async def request(req, **user_kw):
     fn, args, kwargs, timeout, cleanup = _transform(req, **user_kw)
 
-    if _proxy:
-        kwargs['proxy'] = _proxy[1]
-        if len(_proxy) > 2 and _proxy_auth:
-            kwargs['proxy_auth'] = _proxy_auth(*_proxy[2]);
+    kwargs.update(_proxy_kwargs())
     try:
         if timeout is None:
             async with fn(*args, **kwargs) as r:
@@ -168,10 +177,17 @@ async def request(req, **user_kw):
         raise exception.TelegramError('Connection Error', 400, {})
 
     finally:
-        if cleanup:
-            cleanup()  # e.g. closing one-time session
+        if cleanup:  # e.g. closing one-time session
+            if asyncio.iscoroutinefunction(cleanup):
+                await cleanup()
+            else:
+                cleanup()
 
 def download(req):
     session = _create_onetime_pool()
-    return session, session.get(_fileurl(req), timeout=_timeout)
+
+    kwargs = {}
+    kwargs.update(_proxy_kwargs())
+
+    return session, session.get(_fileurl(req), timeout=_timeout, **kwargs)
     # Caller should close session after download is complete
