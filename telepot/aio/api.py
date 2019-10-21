@@ -4,8 +4,7 @@ import async_timeout
 import atexit
 import re
 import json
-import aiosocks
-from aiosocks.connector import ProxyConnector, ProxyClientRequest
+from aiohttp_socks import SocksConnector
 from .. import exception
 from ..api import _methodurl, _which_pool, _fileurl, _guess_filename
 
@@ -33,19 +32,27 @@ def set_proxy(url, auth=None):
 
         _proxy_auth = aiohttp.BasicAuth
         if type != "http":
-            socks_conn = ProxyConnector(remote_resolve=True, limit=10);
-            _pools['default'] = aiohttp.ClientSession(connector=socks_conn, request_class=ProxyClientRequest, loop=_loop)
+            if not auth:
+                socks_conn = SocksConnector.from_url(url, rdns=True, limit=10)
+            else:
+                if len(auth) < 2:
+                    auth += ('',)
+                socks_conn = SocksConnector.from_url(url, rnds=True, username=auth[0],
+                        password=auth[1], limit=10)
+
+            _pools['default'] = aiohttp.ClientSession(connector=socks_conn, loop=_loop)
 
             _proxy_auth = {
-                        "socks4": aiosocks.Socks4Auth,
-                        "socks5": aiosocks.Socks5Auth,
+                        "socks4": None, # as socks imped by aiohttp_socks and it handles auth internally
+                        "socks5": None,
                 }.get(type, None);
         
 
 
 
 def _proxy_kwargs():
-    if _proxy is None or len(_proxy) == 0:
+    if _proxy is None or len(_proxy) == 0 or\
+        _proxy[0] == 'http':  # as currently only http support `proxy` and `proxy_auth` kwargs
         return {}
     try:
         kw = {'proxy': _proxy[1]}
@@ -65,7 +72,12 @@ atexit.register(lambda: _loop.create_task(_close_pools()))  # have to wrap async
 
 def _create_onetime_pool():
     if _proxy and _proxy[0] != "http":
-        socks_conn = ProxyConnector(remote_resolve=True, limit=1, force_close=True);
+        if len(_proxy) > 2:  # auth
+            auth = _proxy[2]
+            socks_conn = SocksConnector.from_url(_prox[1], rdns=True, username=auth[0], 
+                    password=auth[1], limit=1, force_close=True)
+        else:
+            socks_conn = SocksConnector(_proxy[1], rdns=True, limit=1, force_close=True);
         return aiohttp.ClientSession(connector=socks_conn, request_class=ProxyClientRequest, loop=_loop)
     else:
         return aiohttp.ClientSession(
